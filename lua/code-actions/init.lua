@@ -1,5 +1,6 @@
 local M = {
   config = {
+    register_keymap = true,
     name = "code-actions",
     actions = {},
     filetypes = {
@@ -35,11 +36,12 @@ function M.setup(config)
     callback = function(ev)
       lsp.start(M.config, ev.buf, ev.match)
       vim.iter(M.config.servers):each(function(name, cfg)
-        local server_config = condition_config(name, cfg)
         print("starting " .. name)
-        lsp.start(server_config, ev.buf, ev.match)
+        lsp.start(condition_config(name, cfg), ev.buf, ev.match)
       end)
-      vim.keymap.set("n", "ca", vim.lsp.buf.code_action, { buffer = ev.buf })
+      if M.config.register_keymap then
+        vim.keymap.set("n", "ca", vim.lsp.buf.code_action, { buffer = ev.buf })
+      end
     end,
   })
 end
