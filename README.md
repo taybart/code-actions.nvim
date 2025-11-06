@@ -48,10 +48,7 @@ Add custom code actions to Neovim
                 command = 'hello world', -- what will show up in the picker
                 -- check whether to show the action, this defaults always show if not provided
                 show = function(ctx)
-                    if ctx.g.happy or ctx.filetype == 'markdown' then
-                        return true
-                    end
-                    return false
+                    return ctx.g.happy or ctx.filetype == 'markdown'
                 end,
                 fn = function(action) -- action is passed back to the fn including ctx
                   vim.notify(
