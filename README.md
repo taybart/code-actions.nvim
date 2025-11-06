@@ -122,4 +122,4 @@ Here is an example of a server that implements [gitsigns](https://github.com/lew
 }
 ```
 
-Thanks to [YaroSpace](https://github.com/YaroSpace) for the inital lsp code
+Thanks to [YaroSpace](https://github.com/YaroSpace) for the initial lsp code
