@@ -36,7 +36,6 @@ function M.setup(config)
     callback = function(ev)
       lsp.start(M.config, ev.buf, ev.match)
       vim.iter(M.config.servers):each(function(name, cfg)
-        print("starting " .. name)
         lsp.start(condition_config(name, cfg), ev.buf, ev.match)
       end)
       if M.config.register_keymap then
