@@ -29,7 +29,7 @@ end
 function M.setup(config)
   M.config = vim.tbl_deep_extend("force", M.config, config)
   -- force main actions server to be code-actions
-  M.config = condition_config("code-actions", M.config)
+  M.config = condition_config(M.config.name, M.config)
 
   vim.api.nvim_create_autocmd({ "FileType" }, {
     group = vim.api.nvim_create_augroup("code-actions", { clear = true }),
