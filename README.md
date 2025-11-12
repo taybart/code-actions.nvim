@@ -48,8 +48,11 @@ Add custom code actions to Neovim
                 command = 'hello world', -- what will show up in the picker
                 -- check whether to show the action, this defaults always show if not provided
                 show = function(ctx)
+                    -- here we are checking if the global ctx has happy and if we are in a markdown file
                     return ctx.g.happy or ctx.filetype == 'markdown'
                 end,
+                -- show can also be a table with conditions such as filetype
+                show = { ft = { 'markdown' }} -- only show in markdown files
                 fn = function(action) -- action is passed back to the fn including ctx
                   vim.notify(
                         'from: '.. action.command,
@@ -73,6 +76,8 @@ Add custom code actions to Neovim
 ### Servers
 
 Here is an example of a server that implements [gitsigns](https://github.com/lewis6991/gitsigns.nvim) actions
+
+**NOTE**: if you are including this as a dependency for your own plugin, make sure to use the servers option so you don't clobber users default actions
 
 ```lua
 {

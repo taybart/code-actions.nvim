@@ -123,6 +123,25 @@ function LSP:get_ctx(params)
   return ctx
 end
 
+local function check_show(action)
+  if action.show == nil then
+    return true
+  end
+  if type(action.show) == "function" then
+    return action.show(action.ctx)
+  end
+  if type(action.show) == "table" then
+    if action.show.ft ~= nil then
+      local sh = vim.iter(action.show.ft):find(action.ctx.filetype)
+      if sh ~= nil then
+        return true
+      end
+    end
+  end
+
+  return false
+end
+
 --- @param ctx Ctx|nil
 function LSP:code_actions(ctx)
   -- Initialize commands and titles
@@ -141,12 +160,7 @@ function LSP:code_actions(ctx)
       :filter(function(action)
         ctx.g = self.ctx
         action.ctx = ctx
-        if action.show == nil then
-          action.show = function()
-            return true
-          end
-        end
-        return action.show(ctx) and not action._hide
+        return check_show(action)
       end)
       :totable()
 end
