@@ -11,7 +11,7 @@ local M = {
   },
 }
 
-local lsp = require("code-actions/lsp")
+local servers = require("code-actions/servers")
 
 local function condition_config(name, config)
   config.name = name
@@ -34,9 +34,9 @@ function M.setup(config)
   vim.api.nvim_create_autocmd({ "FileType" }, {
     group = vim.api.nvim_create_augroup("code-actions", { clear = true }),
     callback = function(ev)
-      lsp.start(M.config, ev.buf, ev.match)
+      servers.start(M.config, ev.buf, ev.match)
       vim.iter(M.config.servers):each(function(name, cfg)
-        lsp.start(condition_config(name, cfg), ev.buf, ev.match)
+        servers.start(condition_config(name, cfg), ev.buf, ev.match)
       end)
       if M.config.register_keymap then
         vim.keymap.set("n", "ca", vim.lsp.buf.code_action, { buffer = ev.buf })
