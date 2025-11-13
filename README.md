@@ -34,6 +34,7 @@ Add custom code actions to Neovim
     'taybart/code-actions.nvim',
     opts = {
         register_keymap = true, -- register nmap("ca") for code actions in buffer
+                                -- ie: vim.keymap.set("n", "ca", vim.lsp.buf.code_action, { buffer = ev.buf })
         filetypes = {
             exclude = {},
             include = {},
