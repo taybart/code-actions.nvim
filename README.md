@@ -15,35 +15,7 @@ Add custom code actions to Neovim
             {
                 command = 'hello world', -- what will show up in the picker
                 fn = function(action) -- action is passed back with context
-                --    action.ctx = {
-                --      buf = 1,
-                --      bufname = "/path/to/taybart/code-actions.nvim/README.md",
-                --      col = 4,
-                --      filetype = "markdown",
-                --      g = {
-                --          -- global context, see gitsigns implementation below
-                --      },
-                --      line = "                fn = function(params) -- action is passed back with context ",
-                --      range = {
-                --        ["end"] = <1>{
-                --          character = 4,
-                --          line = 16
-                --        },
-                --        rc = { 16, 4, 16, 4 },
-                --        start = <table 1>
-                --      },
-                --      root = "/path/to/code-actions.nvim",
-                --      row = 16,
-                --      ts_range = { 10, 0, 27, 0 },
-                --      ts_type = "code_fence_content",
-                --      win = 1000,
-                --      word = "fn"
-                --    },
-                  vim.notify(
-                        'from '.. action.command,
-                        vim.log.levels.INFO,
-                        { title = 'hello!' }
-                    )
+                  vim.notify( 'from '.. action.command, vim.log.levels.INFO, { title = 'hello!' })
                 end,
             }
         },
@@ -97,6 +69,36 @@ Add custom code actions to Neovim
 }
 ```
 
+
+### Context
+
+This would be the context generated from a code action on the install example on the fn line:
+
+```lua
+   action.ctx = {
+     buf = 1,
+     bufname = "/path/to/taybart/code-actions.nvim/README.md",
+     col = 4,
+     filetype = "markdown",
+     g = { -- global context, see gitsigns implementation as an example of using g
+     },
+     line = "                fn = function(params) -- action is passed back with context ",
+     range = {
+       ["end"] = <1>{
+         character = 4,
+         line = 16
+       },
+       rc = { 16, 4, 16, 4 },
+       start = <table 1>
+     },
+     root = "/path/to/code-actions.nvim",
+     row = 16,
+     ts_range = { 10, 0, 27, 0 },
+     ts_type = "code_fence_content",
+     win = 1000,
+     word = "fn"
+   },
+```
 
 ### Servers
 
