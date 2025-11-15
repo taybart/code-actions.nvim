@@ -15,17 +15,14 @@ local servers = require("code-actions/servers")
 
 local function condition_config(name, config)
   config.name = name
-  if config.ctx == nil then
-    config.ctx = function()
-      return {}
-    end
-  end
-  if config.filetypes == nil then
-    config.filetypes = {}
-  end
+  config.ctx = config.ctx or {}
+  config.filetypes = config.filetypes or {}
+  config.filetypes.exclude = config.filetypes.exclude or {}
+  config.filetypes.include = config.filetypes.include or {}
   return config
 end
 
+-- TODO: we need to be able add servers and only run setup once
 function M.setup(config)
   M.config = vim.tbl_deep_extend("force", M.config, config)
   -- force main actions server to be code-actions

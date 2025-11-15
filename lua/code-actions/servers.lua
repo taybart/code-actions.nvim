@@ -2,7 +2,9 @@ local M = {
   servers = {}, -- Store server instances
 }
 
-local LSP = require("code-actions/lsp")
+local log_levels = vim.log.levels
+
+local lsp = require("code-actions/lsp")
 
 M.start = function(config, buf, ft)
   local type = vim.api.nvim_get_option_value("buftype", { buf = buf })
@@ -10,44 +12,34 @@ M.start = function(config, buf, ft)
     return
   end
 
-  if vim.tbl_contains(config.filetypes.exclude or {}, ft) then
+  -- is this an excluded file type?
+  if vim.tbl_contains(config.filetypes.exclude, ft) then
     return
   end
-  if #(config.filetypes.include or {}) > 0 and not vim.tbl_contains(config.filetypes.include, ft) then
+  -- are there included file types and does the file type match?
+  if #config.filetypes.include > 0 and not vim.tbl_contains(config.filetypes.include, ft) then
     return
   end
 
   -- Create a new server instance for this configuration
-  local server = LSP.new(config)
-
-  -- Store the server instance
-  M.servers[config.name] = server
-
-  local dispatchers = {
-    on_exit = function(code, signal)
-      vim.notify(config.name .. " server exited with code " .. code .. " and signal " .. signal, log_levels.ERROR)
-    end,
-  }
-
-  local server_func = server:new_server_with_handlers()
+  local server = lsp.new(config)
 
   local client_id = vim.lsp.start({
     name = config.name,
-    cmd = server_func,
-    root_dir = "",
+    cmd = server:handlers(),
     bufnr = buf,
     on_init = function(client)
       server.client = client
     end,
-    on_exit = function(code, signal) end,
+    on_exit = function() end,
     commands = server.commands,
-  }, dispatchers)
+  })
   if not client_id then
     vim.notify("Failed to start LSP server", log_levels.ERROR)
     return
   end
-
-  server.client = vim.lsp.get_client_by_id(client_id)
+  -- Store the server instance
+  M.servers[config.name] = server
 
   return client_id
 end

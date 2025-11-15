@@ -1,5 +1,5 @@
-local LSP = {}
-LSP.__index = LSP
+local lsp = {}
+lsp.__index = lsp
 
 local log_levels = vim.log.levels
 
@@ -10,7 +10,7 @@ local log_levels = vim.log.levels
 --- @field fn function - what to do when action is triggered
 
 -- Create a new server instance
-function LSP.new(config)
+function lsp.new(config)
   local server = {
     name = config.name,
     actions = config.actions or {},
@@ -34,13 +34,13 @@ function LSP.new(config)
     server.ctx = config.ctx
   end
 
-  setmetatable(server, LSP)
+  setmetatable(server, lsp)
 
   return server
 end
 
 --- @return table
-function LSP:make_params()
+function lsp:make_params()
   local mode = vim.api.nvim_get_mode().mode
   local offset = self.client and self.client.offset_encoding or "utf-16"
   local params
@@ -75,14 +75,6 @@ function LSP:make_params()
   return params
 end
 
-function LSP:initialize()
-  return {
-    capabilities = {
-      codeActionProvider = true,
-    },
-  }
-end
-
 --- @class Ctx
 --- @field buf number - buffer number
 --- @field win number - window number
@@ -101,7 +93,7 @@ end
 
 --- @param params table|nil
 --- @return Ctx|nil
-function LSP:get_ctx(params)
+function lsp:get_ctx(params)
   params = params or self:make_params()
 
   local buf = vim.uri_to_bufnr(params.textDocument.uri)
@@ -149,7 +141,7 @@ function LSP:get_ctx(params)
   return ctx
 end
 
-local function check_show(action)
+local function should_show(action)
   -- default to showing
   if action.show == nil then
     return true
@@ -169,66 +161,63 @@ local function check_show(action)
 end
 
 --- @param ctx Ctx
-function LSP:code_actions(ctx)
+function lsp:code_actions(ctx)
   return vim.iter(self.actions)
       :filter(function(action)
-        -- add global context
-        ctx.g = self.ctx
-        -- action context
         action.ctx = ctx
-        return check_show(action)
+        return should_show(action)
       end)
       :totable()
 end
 
-function LSP:new_server_with_handlers()
-  -- Update handlers to use server instance
-  local server_handlers = {
-    ["initialize"] = function()
-      return self:initialize()
-    end,
-    ["textDocument/codeAction"] = function(ctx)
-      return self:code_actions(ctx)
+function lsp:handlers()
+  -- stylua: ignore
+  local handlers = {
+    ["initialize"] = function() return { capabilities = { codeActionProvider = true } } end,
+    ["textDocument/codeAction"] = function(params)
+      local ctx = self:get_ctx(params)
+      if not ctx then
+        vim.notify("could not get action context", log_levels.ERROR)
+        return
+      end
+      local ca = self:code_actions(ctx)
+      vim.print(ca)
+      return ca
     end,
     ["shutdown"] = function() end,
   }
 
-  local function server(dispatchers)
-    local srv = {}
-
-    function srv.request(method, params, handler)
-      local status, error = xpcall(function()
-        if server_handlers[method] then
-          local ctx = params and params.textDocument and self:get_ctx(params)
-          handler(nil, server_handlers[method](ctx))
-        end
-      end, debug.traceback)
-
-      if not status then
-        vim.notify("error in LSP request: " .. error, log_levels.ERROR)
-      end
-      return true
-    end
-
-    function srv.notify(method, _)
-      if method == "exit" then
-        dispatchers.on_exit(0, 15)
-      end
-    end
-
+  return function(dispatchers)
     local closing = false
-    function srv.is_closing()
-      return closing
-    end
+    return {
+      request = function(method, params, handler)
+        local status, error = xpcall(function()
+          if handlers[method] then
+            handler(nil, handlers[method](params))
+          end
+        end, debug.traceback)
 
-    function srv.terminate()
-      closing = true
-    end
+        if not status then
+          vim.notify("error in LSP request: " .. error, log_levels.ERROR)
+        end
+        return true
+      end,
 
-    return srv
+      notify = function(method)
+        if method == "exit" then
+          dispatchers.on_exit(0, 15)
+        end
+      end,
+
+      is_closing = function()
+        return closing
+      end,
+
+      terminate = function()
+        closing = true
+      end,
+    }
   end
-
-  return server
 end
 
-return LSP
+return lsp
