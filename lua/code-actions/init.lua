@@ -42,4 +42,14 @@ function M.setup(config)
   })
 end
 
+function M.add_server(config)
+  -- force main actions server to be code-actions
+  vim.api.nvim_create_autocmd({ "FileType" }, {
+    group = vim.api.nvim_create_augroup("code-actions:" .. config.name, { clear = true }),
+    callback = function(ev)
+      servers.start(condition_config(config.name, config), ev.buf, ev.match)
+    end,
+  })
+end
+
 return M

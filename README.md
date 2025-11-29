@@ -104,7 +104,7 @@ This would be the context generated from a code action on the install example on
 
 Here is an example of a server that implements [gitsigns](https://github.com/lewis6991/gitsigns.nvim) actions
 
-**NOTE**: if you are including this as a dependency for your own plugin, make sure to use the servers option so you don't clobber users default actions
+**NOTE**: if you are including this as a dependency for your own plugin, make sure to use the `add_server` option so you don't clobber users default actions
 
 ```lua
 {
