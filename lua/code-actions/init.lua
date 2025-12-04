@@ -23,8 +23,8 @@ local function condition_config(name, config)
 end
 
 -- TODO: we need to be able add servers and only run setup once
-function M.setup(config)
-  M.config = vim.tbl_deep_extend("force", M.config, config)
+function M.setup(opts)
+  M.config = vim.tbl_deep_extend("force", M.config, opts)
   -- force main actions server to be code-actions
   M.config = condition_config(M.config.name, M.config)
 
