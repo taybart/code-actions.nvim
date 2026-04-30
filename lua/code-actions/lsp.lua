@@ -20,7 +20,7 @@ function lsp.new(config)
   }
 
   -- Initialize commands and titles
-  vim.iter(server.actions):map(function(action)
+  vim.iter(server.actions):each(function(action)
     if action.title == nil then
       action.title = action.command
     end
