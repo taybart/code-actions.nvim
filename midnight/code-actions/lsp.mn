@@ -1,0 +1,207 @@
+local log_levels = vim.log.levels
+
+local function should_show(action) {
+  -- default to showing
+  if action.show == nil {
+    return true
+  }
+  if type(action.show) == 'function' {
+    return action.show(action.ctx)
+  }
+  if type(action.show) == 'table' {
+    if action.show.ft != nil {
+      if vim.tbl_contains(action.show.ft || {}, action.ctx.filetype) {
+        return true
+      }
+    }
+  }
+  -- don't show if something was specified and it didn't match above
+  return false
+}
+
+--- @class Action
+--- @field command string - command name
+--- @field title string - what should be shown in the picker
+--- @field show function - should the action be shown
+--- @field fn function - what to do when action is triggered
+
+local class lsp {
+  -- Create a new server instance
+  new(config) {
+    self.name = config.name
+    self.actions = config.actions || {}
+    self.commands = {}
+    self.ctx = {}
+    self.client = nil -- set by servers.start once the client is up
+
+    -- Initialize commands and titles
+    vim.iter(self.actions):each((action) -> {
+      if action.title == nil {
+        action.title = action.command
+      }
+      self.commands[action.command] = action.fn
+    })
+
+    -- Set up global context
+    match type(config.ctx) {
+      'function' => { self.ctx = config.ctx() }
+      'table' => { self.ctx = config.ctx }
+    }
+  }
+
+  --- @return table
+  make_params() {
+    local mode = vim.api.nvim_get_mode().mode
+    local offset = self.client && self.client.offset_encoding || 'utf-16'
+    local params
+
+    if mode == 'v' || mode == 'V' {
+      local start = vim.fn.getpos('v')
+      local end_ = vim.fn.getpos('.')
+
+      local start_row, start_col = start[2], start[3]
+      local end_row, end_col = end_[2], end_[3]
+
+      if start_row == end_row && end_col < start_col {
+        end_col, start_col = start_col, end_col
+      } elseif end_row < start_row {
+        start_row, end_row = end_row, start_row
+        start_col, end_col = end_col, start_col
+      }
+
+      if mode == 'V' {
+        start_col = 1
+        local lines = vim.api.nvim_buf_get_lines(0, end_row - 1, end_row, true)
+        end_col = #lines[1]
+      }
+
+      local range_start = { start_row, start_col - 1 }
+      local range_end = { end_row, end_col - 1 }
+      params = vim.lsp.util.make_given_range_params(range_start, range_end, 0, offset)
+    } else {
+      params = vim.lsp.util.make_range_params(0, offset)
+    }
+
+    return params
+  }
+
+  --- @class Ctx
+  --- @field buf number - buffer number
+  --- @field win number - window number
+  --- @field row number - current line number
+  --- @field col number - current column number
+  --- @field line string - current line
+  --- @field word string - word under cursor
+  --- @field ts_node userdata|nil - current TS node
+  --- @field ts_type string|nil - type of the current TS node
+  --- @field ts_range table|nil - range of the current TS node
+  --- @field bufname string - full path to file in buffer
+  --- @field root string - root directory of the file
+  --- @field filetype string - filetype
+  --- @field range table|nil - range of the current selection
+  --- @field g table - global run context provided in the config
+
+  --- @param params table|nil
+  --- @return Ctx|nil
+  get_ctx(params = self:make_params()) {
+    local buf = vim.uri_to_bufnr(params.textDocument.uri)
+    local win = vim.fn.win_findbuf(buf)[1]
+
+    if !win { return }
+
+    local cursor = vim.api.nvim_win_get_cursor(win)
+    local row = if params.range { params.range.start.line } else { cursor[1] }
+    local col = if params.range { params.range.start.character } else { cursor[2] }
+
+    local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1]
+    local node = vim.treesitter.get_node()
+
+    local file = vim.uri_to_fname(params.textDocument.uri)
+    local root = vim.fs.root(file, { '.git', '.gitignore' }) || ''
+
+    if params.range {
+      params.range.rc = {
+        params.range.start.line,
+        params.range.start.character,
+        params.range['end'].line,
+        params.range['end'].character,
+      }
+    }
+
+    local ctx = {
+      buf = buf,
+      win = win,
+      row = row,
+      col = col,
+      line = line,
+      word = if line { vim.fn.expand('<cword>') } else { nil },
+      ts_type = if node { node:type() } else { nil },
+      ts_range = if node { { node:range() } } else { nil },
+      bufname = file,
+      root = root,
+      filetype = vim.api.nvim_get_option_value('filetype', { buf = buf }),
+      range = params.range,
+      g = self.ctx,
+    }
+
+    return ctx
+  }
+
+  --- @param ctx Ctx
+  code_actions(ctx) {
+    return vim.iter(self.actions)
+      :filter((action) -> {
+        action.ctx = ctx
+        return should_show(action)
+      })
+      :totable()
+  }
+
+  handlers() {
+    -- stylua: ignore
+    local handlers = {
+      ['initialize'] = () -> ({ capabilities = { codeActionProvider = true } }),
+      ['textDocument/codeAction'] = (params) -> {
+        local ctx = self:get_ctx(params)
+        if !ctx {
+          vim.notify('could not get action context', log_levels.ERROR)
+          return
+        }
+        return self:code_actions(ctx)
+      },
+      ['shutdown'] = () -> {},
+    }
+
+    return (dispatchers) -> {
+      local closing = false
+      return {
+        request = (method, params, handler) -> {
+          local status, error = xpcall(() -> {
+            if handlers[method] {
+              handler(nil, handlers[method](params))
+            }
+          }, debug.traceback)
+
+          if !status {
+            vim.notify('error in LSP request: ' .. error, log_levels.ERROR)
+          }
+          return true
+        },
+
+        notify = (method) -> {
+          if method == 'exit' {
+            dispatchers.on_exit(0, 15)
+          }
+        },
+
+        is_closing = () -> closing,
+
+        terminate = () -> {
+          closing = true
+        },
+      }
+    }
+  }
+}
+
+return lsp

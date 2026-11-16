@@ -1,15 +1,13 @@
-local M = {
-  config = {
-    register_keymap = true,
-    name = "code-actions",
-    actions = {},
-    filetypes = {
-      include = {},
-      exclude = {},
-    },
-    servers = {},
-  },
-}
+local _MODULE = {} _MODULE.config = {register_keymap = 
+true, name = 
+"code-actions", actions = 
+{}, filetypes = 
+{include = 
+{}, exclude = 
+{}}, servers = 
+
+{}}
+
 
 local servers = require("code-actions/servers")
 
@@ -22,34 +20,34 @@ local function condition_config(name, config)
   return config
 end
 
--- TODO: we need to be able add servers and only run setup once
-function M.setup(opts)
-  M.config = vim.tbl_deep_extend("force", M.config, opts)
-  -- force main actions server to be code-actions
-  M.config = condition_config(M.config.name, M.config)
 
-  vim.api.nvim_create_autocmd({ "FileType" }, {
-    group = vim.api.nvim_create_augroup("code-actions", { clear = true }),
-    callback = function(ev)
-      servers.start(M.config, ev.buf, ev.match)
-      vim.iter(M.config.servers):each(function(name, cfg)
-        servers.start(condition_config(name, cfg), ev.buf, ev.match)
-      end)
-      if M.config.register_keymap then
-        vim.keymap.set("n", "ca", vim.lsp.buf.code_action, { buffer = ev.buf })
-      end
-    end,
-  })
+function _MODULE.setup(opts)
+  _MODULE.config = vim.tbl_deep_extend("force", _MODULE.config, opts)
+
+  _MODULE.config = condition_config(_MODULE.config.name, _MODULE.config)
+
+  vim.api.nvim_create_autocmd({"FileType"}, {group = 
+  vim.api.nvim_create_augroup("code-actions", {clear = true}), callback = 
+  function(ev)
+    servers.start(_MODULE.config, ev.buf, ev.match)
+    vim.iter(_MODULE.config.servers):each(function(name, cfg)
+      servers.start(condition_config(name, cfg), ev.buf, ev.match)
+    end)
+    if _MODULE.config.register_keymap then
+      vim.keymap.set("n", "ca", vim.lsp.buf.code_action, {buffer = ev.buf})
+    end
+  end})
+
 end
 
-function M.add_server(config)
-  -- force main actions server to be code-actions
-  vim.api.nvim_create_autocmd({ "FileType" }, {
-    group = vim.api.nvim_create_augroup("code-actions:" .. config.name, { clear = true }),
-    callback = function(ev)
-      servers.start(condition_config(config.name, config), ev.buf, ev.match)
-    end,
-  })
-end
+function _MODULE.add_server(config)
 
-return M
+  vim.api.nvim_create_autocmd({"FileType"}, {group = 
+  vim.api.nvim_create_augroup("code-actions:" .. tostring(config.name), {clear = true}), callback = 
+  function(ev)
+    servers.start(condition_config(config.name, config), ev.buf, ev.match)
+  end})
+
+end
+return _MODULE
+-- __MIDNIGHT_COMPILED__

@@ -1,45 +1,55 @@
-local lsp = {}
-lsp.__index = lsp
-
 local log_levels = vim.log.levels
 
---- @class Action
---- @field command string - command name
---- @field title string - what should be shown in the picker
---- @field show function - should the action be shown
---- @field fn function - what to do when action is triggered
+local function should_show(action)
 
--- Create a new server instance
-function lsp.new(config)
-  local server = {
-    name = config.name,
-    actions = config.actions or {},
-    commands = {},
-    ctx = {},
-    client = nil,
-  }
+  if action.show == nil then
+    return true
+  end
+  if type(action.show) == "function" then
+    return action.show(action.ctx)
+  end
+  if type(action.show) == "table" then
+    if action.show.ft ~= nil then
+      if vim.tbl_contains(action.show.ft or {}, action.ctx.filetype) then
+        return true
+      end
+    end
+  end
 
-  -- Initialize commands and titles
-  vim.iter(server.actions):each(function(action)
+  return false
+end
+
+
+
+
+
+
+
+local lsp = {} lsp.__index = lsp
+
+function lsp.new(config) local self = setmetatable({}, lsp)
+  self.name = config.name
+  self.actions = config.actions or {}
+  self.commands = {}
+  self.ctx = {}
+  self.client = nil
+
+
+  vim.iter(self.actions):each(function(action)
     if action.title == nil then
       action.title = action.command
     end
-    server.commands[action.command] = action.fn
+    self.commands[action.command] = action.fn
   end)
 
-  -- Set up global context
-  if type(config.ctx) == "function" then
-    server.ctx = config.ctx()
-  elseif type(config.ctx) == "table" then
-    server.ctx = config.ctx
-  end
 
-  setmetatable(server, lsp)
+  do local __MIDNIGHT_TMP_1__ = type(config.ctx)
+    if __MIDNIGHT_TMP_1__ == "function" then self.ctx = config.ctx()
+    elseif __MIDNIGHT_TMP_1__ == "table" then self.ctx = config.ctx
+    end end
+  return self end
 
-  return server
-end
 
---- @return table
 function lsp:make_params()
   local mode = vim.api.nvim_get_mode().mode
   local offset = self.client and self.client.offset_encoding or "utf-16"
@@ -65,157 +75,134 @@ function lsp:make_params()
       end_col = #lines[1]
     end
 
-    local range_start = { start_row, start_col - 1 }
-    local range_end = { end_row, end_col - 1 }
-    params = vim.lsp.util.make_given_range_params(range_start, range_end, 0, offset)
-  else
+    local range_start = {start_row, start_col - 1}
+    local range_end = {end_row, end_col - 1}
+    params = vim.lsp.util.make_given_range_params(range_start, range_end, 0, offset) else
+
     params = vim.lsp.util.make_range_params(0, offset)
   end
 
   return params
 end
 
---- @class Ctx
---- @field buf number - buffer number
---- @field win number - window number
---- @field row number - current line number
---- @field col number - current column number
---- @field line string - current line
---- @field word string - word under cursor
---- @field ts_node userdata|nil - current TS node
---- @field ts_type string|nil - type of the current TS node
---- @field ts_range table|nil - range of the current TS node
---- @field bufname string - full path to file in buffer
---- @field root string - root directory of the file
---- @field filetype string - filetype
---- @field range table|nil - range of the current selection
---- @field g table - global run context provided in the config
 
---- @param params table|nil
---- @return Ctx|nil
-function lsp:get_ctx(params)
-  params = params or self:make_params()
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function lsp:get_ctx(params) if params == nil then params = self:make_params() end
   local buf = vim.uri_to_bufnr(params.textDocument.uri)
   local win = vim.fn.win_findbuf(buf)[1]
 
-  if not win then
-    return
-  end
+  if not win then return end
 
   local cursor = vim.api.nvim_win_get_cursor(win)
-  local row = params.range and params.range.start.line or cursor[1]
-  local col = params.range and params.range.start.character or cursor[2]
+  local __MIDNIGHT_TMP_2__ if params.range then __MIDNIGHT_TMP_2__ = params.range.start.line else __MIDNIGHT_TMP_2__ = cursor[1] end local row = __MIDNIGHT_TMP_2__
+  local __MIDNIGHT_TMP_3__ if params.range then __MIDNIGHT_TMP_3__ = params.range.start.character else __MIDNIGHT_TMP_3__ = cursor[2] end local col = __MIDNIGHT_TMP_3__
 
   local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1]
   local node = vim.treesitter.get_node()
 
   local file = vim.uri_to_fname(params.textDocument.uri)
-  local root = vim.fs.root(file, { ".git", ".gitignore" }) or ""
+  local root = vim.fs.root(file, {".git", ".gitignore"}) or ""
 
   if params.range then
     params.range.rc = {
-      params.range.start.line,
-      params.range.start.character,
-      params.range["end"].line,
-      params.range["end"].character,
-    }
+    params.range.start.line, 
+    params.range.start.character, 
+    params.range["end"].line, 
+    params.range["end"].character}
+
   end
 
-  local ctx = {
-    buf = buf,
-    win = win,
-    row = row,
-    col = col,
-    line = line,
-    word = line and vim.fn.expand("<cword>") or nil,
-    ts_type = node and node:type() or nil,
-    ts_range = node and { node:range() } or nil,
-    bufname = file,
-    root = root,
-    filetype = vim.api.nvim_get_option_value("filetype", { buf = buf }),
-    range = params.range,
-    g = self.ctx,
-  }
+  local ctx = {buf = 
+  buf, win = 
+  win, row = 
+  row, col = 
+  col, line = 
+  line, word = 
+  ((function() if line then return (vim.fn.expand("<cword>")) else return nil end end)()), ts_type = 
+  ((function() if node then return (node:type()) else return nil end end)()), ts_range = 
+  ((function() if node then return {node:range()} else return nil end end)()), bufname = 
+  file, root = 
+  root, filetype = 
+  vim.api.nvim_get_option_value("filetype", {buf = buf}), range = 
+  params.range, g = 
+  self.ctx}
+
 
   return ctx
 end
 
-local function should_show(action)
-  -- default to showing
-  if action.show == nil then
-    return true
-  end
-  if type(action.show) == "function" then
-    return action.show(action.ctx)
-  end
-  if type(action.show) == "table" then
-    if action.show.ft ~= nil then
-      if vim.tbl_contains(action.show.ft or {}, action.ctx.filetype) then
-        return true
-      end
-    end
-  end
-  -- don't show if something was specified and it didn't match above
-  return false
-end
 
---- @param ctx Ctx
 function lsp:code_actions(ctx)
-  return vim.iter(self.actions)
-      :filter(function(action)
-        action.ctx = ctx
-        return should_show(action)
-      end)
-      :totable()
+  return 
+
+
+
+
+  vim.iter(self.actions):filter(function(action) action.ctx = ctx return should_show(action) end):totable()
 end
 
 function lsp:handlers()
-  -- stylua: ignore
-  local handlers = {
-    ["initialize"] = function() return { capabilities = { codeActionProvider = true } } end,
-    ["textDocument/codeAction"] = function(params)
-      local ctx = self:get_ctx(params)
-      if not ctx then
-        vim.notify("could not get action context", log_levels.ERROR)
-        return
-      end
-      return self:code_actions(ctx)
-    end,
-    ["shutdown"] = function() end,
-  }
+
+  local handlers = {initialize = 
+  function() return {capabilities = {codeActionProvider = true}} end, [
+  "textDocument/codeAction"] = function(params)
+    local ctx = self:get_ctx(params)
+    if not ctx then
+      vim.notify("could not get action context", log_levels.ERROR)
+      return
+    end
+    return self:code_actions(ctx)
+  end, shutdown = 
+  function() end}
+
 
   return function(dispatchers)
     local closing = false
-    return {
-      request = function(method, params, handler)
-        local status, error = xpcall(function()
-          if handlers[method] then
-            handler(nil, handlers[method](params))
-          end
-        end, debug.traceback)
-
-        if not status then
-          vim.notify("error in LSP request: " .. error, log_levels.ERROR)
+    return {request = 
+    function(method, params, handler)
+      local status, error = xpcall(function()
+        if handlers[method] then
+          handler(nil, handlers[method](params))
         end
-        return true
-      end,
+      end, debug.traceback)
 
-      notify = function(method)
-        if method == "exit" then
-          dispatchers.on_exit(0, 15)
-        end
-      end,
+      if not status then
+        vim.notify("error in LSP request: " .. error, log_levels.ERROR)
+      end
+      return true
+    end, notify = 
 
-      is_closing = function()
-        return closing
-      end,
+    function(method)
+      if method == "exit" then
+        dispatchers.on_exit(0, 15)
+      end
+    end, is_closing = 
 
-      terminate = function()
-        closing = true
-      end,
-    }
+    function() return closing end, terminate = 
+
+    function()
+      closing = true
+    end}
+
   end
 end
 
+
 return lsp
+-- __MIDNIGHT_COMPILED__

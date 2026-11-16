@@ -1,0 +1,51 @@
+module config = {
+  register_keymap = true,
+  name = 'code-actions',
+  actions = {},
+  filetypes = {
+    include = {},
+    exclude = {},
+  },
+  servers = {},
+}
+
+local servers = require('code-actions/servers')
+
+local function condition_config(name, config) {
+  config.name = name
+  config.ctx = config.ctx || {}
+  config.filetypes = config.filetypes || {}
+  config.filetypes.exclude = config.filetypes.exclude || {}
+  config.filetypes.include = config.filetypes.include || {}
+  return config
+}
+
+-- TODO: we need to be able add servers and only run setup once
+module function setup(opts) {
+  config = vim.tbl_deep_extend('force', config, opts)
+  -- force main actions server to be code-actions
+  config = condition_config(config.name, config)
+
+  vim.api.nvim_create_autocmd({ 'FileType' }, {
+    group = vim.api.nvim_create_augroup('code-actions', { clear = true }),
+    callback = (ev) -> {
+      servers.start(config, ev.buf, ev.match)
+      vim.iter(config.servers):each((name, cfg) -> {
+        servers.start(condition_config(name, cfg), ev.buf, ev.match)
+      })
+      if config.register_keymap {
+        vim.keymap.set('n', 'ca', vim.lsp.buf.code_action, { buffer = ev.buf })
+      }
+    },
+  })
+}
+
+module function add_server(config) {
+  -- force main actions server to be code-actions
+  vim.api.nvim_create_autocmd({ 'FileType' }, {
+    group = vim.api.nvim_create_augroup("code-actions:{config.name}", { clear = true }),
+    callback = (ev) -> {
+      servers.start(condition_config(config.name, config), ev.buf, ev.match)
+    },
+  })
+}
