@@ -19,11 +19,11 @@ local function should_show(action)
   return false
 end
 
-
-
-
-
-
+--- @class Action
+--- @field command string - command name
+--- @field title string - what should be shown in the picker
+--- @field show function - should the action be shown
+--- @field fn function - what to do when action is triggered
 
 local lsp = {} lsp.__index = lsp
 
@@ -49,7 +49,7 @@ function lsp.new(config) local self = setmetatable({}, lsp)
     end end
   return self end
 
-
+--- @return table
 function lsp:make_params()
   local mode = vim.api.nvim_get_mode().mode
   local offset = self.client and self.client.offset_encoding or "utf-16"
@@ -85,24 +85,24 @@ function lsp:make_params()
   return params
 end
 
+--- @class Ctx
+--- @field buf number - buffer number
+--- @field win number - window number
+--- @field row number - current line number
+--- @field col number - current column number
+--- @field line string - current line
+--- @field word string - word under cursor
+--- @field ts_node userdata|nil - current TS node
+--- @field ts_type string|nil - type of the current TS node
+--- @field ts_range table|nil - range of the current TS node
+--- @field bufname string - full path to file in buffer
+--- @field root string - root directory of the file
+--- @field filetype string - filetype
+--- @field range table|nil - range of the current selection
+--- @field g table - global run context provided in the config
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+--- @param params table|nil
+--- @return Ctx|nil
 function lsp:get_ctx(params) if params == nil then params = self:make_params() end
   local buf = vim.uri_to_bufnr(params.textDocument.uri)
   local win = vim.fn.win_findbuf(buf)[1]
@@ -124,30 +124,30 @@ function lsp:get_ctx(params) if params == nil then params = self:make_params() e
     params.range.start.line, 
     params.range.start.character, 
     params.range["end"].line, 
-    params.range["end"].character}
-
+    params.range["end"].character
+    }
   end
 
-  local ctx = {buf = 
-  buf, win = 
-  win, row = 
-  row, col = 
-  col, line = 
-  line, word = 
-  ((function() if line then return (vim.fn.expand("<cword>")) else return nil end end)()), ts_type = 
-  ((function() if node then return (node:type()) else return nil end end)()), ts_range = 
-  ((function() if node then return {node:range()} else return nil end end)()), bufname = 
-  file, root = 
-  root, filetype = 
-  vim.api.nvim_get_option_value("filetype", {buf = buf}), range = 
-  params.range, g = 
-  self.ctx}
-
+  local ctx = {
+  buf = buf, 
+  win = win, 
+  row = row, 
+  col = col, 
+  line = line, 
+  word = ((function() if line then return (vim.fn.expand("<cword>")) else return nil end end)()), 
+  ts_type = ((function() if node then return (node:type()) else return nil end end)()), 
+  ts_range = ((function() if node then return {node:range()} else return nil end end)()), 
+  bufname = file, 
+  root = root, 
+  filetype = vim.api.nvim_get_option_value("filetype", {buf = buf}), 
+  range = params.range, 
+  g = self.ctx
+  }
 
   return ctx
 end
 
-
+--- @param ctx Ctx
 function lsp:code_actions(ctx)
   return 
 
@@ -159,8 +159,8 @@ end
 
 function lsp:handlers()
 
-  local handlers = {initialize = 
-  function() return {capabilities = {codeActionProvider = true}} end, [
+  local handlers = {
+  initialize = function() return {capabilities = {codeActionProvider = true}} end, [
   "textDocument/codeAction"] = function(params)
     local ctx = self:get_ctx(params)
     if not ctx then
@@ -168,14 +168,14 @@ function lsp:handlers()
       return
     end
     return self:code_actions(ctx)
-  end, shutdown = 
-  function() end}
-
+  end, 
+  shutdown = function() end
+  }
 
   return function(dispatchers)
     local closing = false
-    return {request = 
-    function(method, params, handler)
+    return {
+    request = function(method, params, handler)
       local status, error = xpcall(function()
         if handlers[method] then
           handler(nil, handlers[method](params))
@@ -186,20 +186,20 @@ function lsp:handlers()
         vim.notify("error in LSP request: " .. error, log_levels.ERROR)
       end
       return true
-    end, notify = 
+    end, 
 
-    function(method)
+    notify = function(method)
       if method == "exit" then
         dispatchers.on_exit(0, 15)
       end
-    end, is_closing = 
+    end, 
 
-    function() return closing end, terminate = 
+    is_closing = function() return closing end, 
 
-    function()
+    terminate = function()
       closing = true
-    end}
-
+    end
+    }
   end
 end
 

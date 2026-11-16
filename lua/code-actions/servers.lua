@@ -22,16 +22,16 @@ function _MODULE.start(config, buf, ft)
 
   local server = lsp.new(config)
 
-  local client_id = vim.lsp.start({name = 
-  config.name, cmd = 
-  server:handlers(), bufnr = 
-  buf, on_init = 
-  function(client)
+  local client_id = vim.lsp.start({
+  name = config.name, 
+  cmd = server:handlers(), 
+  bufnr = buf, 
+  on_init = function(client)
     server.client = client
-  end, on_exit = 
-  function() end, commands = 
-  server.commands})
-
+  end, 
+  on_exit = function() end, 
+  commands = server.commands
+  })
   if not client_id then
     vim.notify("Failed to start LSP server", log_levels.ERROR)
     return

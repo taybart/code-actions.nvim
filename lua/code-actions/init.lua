@@ -1,13 +1,13 @@
-local _MODULE = {} _MODULE.config = {register_keymap = 
-true, name = 
-"code-actions", actions = 
-{}, filetypes = 
-{include = 
-{}, exclude = 
-{}}, servers = 
-
-{}}
-
+local _MODULE = {} _MODULE.config = {
+register_keymap = true, 
+name = "code-actions", 
+actions = {}, 
+filetypes = {
+include = {}, 
+exclude = {}
+}, 
+servers = {}
+}
 
 local servers = require("code-actions/servers")
 
@@ -26,9 +26,9 @@ function _MODULE.setup(opts)
 
   _MODULE.config = condition_config(_MODULE.config.name, _MODULE.config)
 
-  vim.api.nvim_create_autocmd({"FileType"}, {group = 
-  vim.api.nvim_create_augroup("code-actions", {clear = true}), callback = 
-  function(ev)
+  vim.api.nvim_create_autocmd({"FileType"}, {
+  group = vim.api.nvim_create_augroup("code-actions", {clear = true}), 
+  callback = function(ev)
     servers.start(_MODULE.config, ev.buf, ev.match)
     vim.iter(_MODULE.config.servers):each(function(name, cfg)
       servers.start(condition_config(name, cfg), ev.buf, ev.match)
@@ -36,18 +36,18 @@ function _MODULE.setup(opts)
     if _MODULE.config.register_keymap then
       vim.keymap.set("n", "ca", vim.lsp.buf.code_action, {buffer = ev.buf})
     end
-  end})
-
+  end
+  })
 end
 
 function _MODULE.add_server(config)
 
-  vim.api.nvim_create_autocmd({"FileType"}, {group = 
-  vim.api.nvim_create_augroup("code-actions:" .. tostring(config.name), {clear = true}), callback = 
-  function(ev)
+  vim.api.nvim_create_autocmd({"FileType"}, {
+  group = vim.api.nvim_create_augroup("code-actions:" .. tostring(config.name), {clear = true}), 
+  callback = function(ev)
     servers.start(condition_config(config.name, config), ev.buf, ev.match)
-  end})
-
+  end
+  })
 end
 return _MODULE
 -- __MIDNIGHT_COMPILED__
