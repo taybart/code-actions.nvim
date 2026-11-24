@@ -1,7 +1,5 @@
 module servers = {} -- Store server instances
 
-local log_levels = vim.log.levels
-
 local lsp = require('code-actions/lsp')
 
 module function start(config, buf, ft) {
@@ -33,7 +31,7 @@ module function start(config, buf, ft) {
     commands = server.commands,
   })
   if !client_id {
-    vim.notify('Failed to start LSP server', log_levels.ERROR)
+    vim.notify('Failed to start LSP server', vim.log.levels.ERROR)
     return
   }
   -- Store the server instance

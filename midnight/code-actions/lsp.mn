@@ -1,5 +1,12 @@
-local log_levels = vim.log.levels
+--- @class Action
+--- @field command string - command name
+--- @field title string - what should be shown in the picker
+--- @field show function|{ ft: string[] }|nil - should the action be shown
+--- @field fn function - what to do when action is triggered
+--- @field ctx Ctx - set by lsp:code_actions before show is checked
 
+--- @param action Action
+--- @return boolean
 local function should_show(action) {
   -- default to showing
   if action.show == nil {
@@ -19,12 +26,7 @@ local function should_show(action) {
   return false
 }
 
---- @class Action
---- @field command string - command name
---- @field title string - what should be shown in the picker
---- @field show function - should the action be shown
---- @field fn function - what to do when action is triggered
-
+--- @class lsp
 local class lsp {
   -- Create a new server instance
   new(config) {
@@ -43,46 +45,40 @@ local class lsp {
     })
 
     -- Set up global context
-    match type(config.ctx) {
-      'function' => { self.ctx = config.ctx() }
-      'table' => { self.ctx = config.ctx }
+    self.ctx = match type(config.ctx) {
+      'function' => { config.ctx() }
+      'table' => { config.ctx }
+      _ => { error('invalid context type') }
     }
   }
 
   --- @return table
   make_params() {
-    local mode = vim.api.nvim_get_mode().mode
-    local offset = self.client && self.client.offset_encoding || 'utf-16'
-    local params
+    const { mode } = vim.api.nvim_get_mode()
+    const offset = if self.client { self.client.offset_encoding } else { 'utf-16' }
 
-    if mode == 'v' || mode == 'V' {
-      local start = vim.fn.getpos('v')
-      local end_ = vim.fn.getpos('.')
-
-      local start_row, start_col = start[2], start[3]
-      local end_row, end_col = end_[2], end_[3]
-
-      if start_row == end_row && end_col < start_col {
-        end_col, start_col = start_col, end_col
-      } elseif end_row < start_row {
-        start_row, end_row = end_row, start_row
-        start_col, end_col = end_col, start_col
-      }
-
-      if mode == 'V' {
-        start_col = 1
-        local lines = vim.api.nvim_buf_get_lines(0, end_row - 1, end_row, true)
-        end_col = #lines[1]
-      }
-
-      local range_start = { start_row, start_col - 1 }
-      local range_end = { end_row, end_col - 1 }
-      params = vim.lsp.util.make_given_range_params(range_start, range_end, 0, offset)
-    } else {
-      params = vim.lsp.util.make_range_params(0, offset)
+    if mode != 'v' && mode != 'V' {
+      return vim.lsp.util.make_range_params(0, offset)
     }
 
-    return params
+    local [_, srow, scol] = vim.fn.getpos('v')
+    local [_, erow, ecol] = vim.fn.getpos('.')
+
+    -- normalize so start comes before end
+    if erow < srow || (erow == srow && ecol < scol) {
+      srow, scol, erow, ecol = erow, ecol, srow, scol
+    }
+
+    if mode == 'V' {
+      scol = 1
+      ecol = #vim.api.nvim_buf_get_lines(0, erow - 1, erow, true)[1]
+    }
+
+    return vim.lsp.util.make_given_range_params(
+      { srow, scol - 1 },
+      { erow, ecol - 1 },
+      0, offset,
+    )
   }
 
   --- @class Ctx
@@ -91,60 +87,45 @@ local class lsp {
   --- @field row number - current line number
   --- @field col number - current column number
   --- @field line string - current line
-  --- @field word string - word under cursor
-  --- @field ts_node userdata|nil - current TS node
+  --- @field word string|nil - word under cursor
   --- @field ts_type string|nil - type of the current TS node
   --- @field ts_range table|nil - range of the current TS node
   --- @field bufname string - full path to file in buffer
   --- @field root string - root directory of the file
   --- @field filetype string - filetype
-  --- @field range table|nil - range of the current selection
+  --- @field range table - LSP range of the selection/cursor, plus `rc` = { srow, scol, erow, ecol }
   --- @field g table - global run context provided in the config
 
   --- @param params table|nil
   --- @return Ctx|nil
   get_ctx(params = self:make_params()) {
-    local buf = vim.uri_to_bufnr(params.textDocument.uri)
-    local win = vim.fn.win_findbuf(buf)[1]
-
+    const { textDocument: doc, range } = params
+    const buf = vim.uri_to_bufnr(doc.uri)
+    const win = vim.fn.win_findbuf(buf)[1]
     if !win { return }
 
-    local cursor = vim.api.nvim_win_get_cursor(win)
-    local row = if params.range { params.range.start.line } else { cursor[1] }
-    local col = if params.range { params.range.start.character } else { cursor[2] }
+    const { start, end: stop } = range
+    range.rc = { start.line, start.character, stop.line, stop.character }
 
-    local line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1]
-    local node = vim.treesitter.get_node()
+    const line = vim.api.nvim_buf_get_lines(buf, start.line, start.line + 1, false)[1]
+    const node = vim.treesitter.get_node()
+    const file = vim.uri_to_fname(doc.uri)
 
-    local file = vim.uri_to_fname(params.textDocument.uri)
-    local root = vim.fs.root(file, { '.git', '.gitignore' }) || ''
-
-    if params.range {
-      params.range.rc = {
-        params.range.start.line,
-        params.range.start.character,
-        params.range['end'].line,
-        params.range['end'].character,
-      }
-    }
-
-    local ctx = {
+    return {
       buf = buf,
       win = win,
-      row = row,
-      col = col,
+      row = start.line,
+      col = start.character,
       line = line,
-      word = if line { vim.fn.expand('<cword>') } else { nil },
-      ts_type = if node { node:type() } else { nil },
-      ts_range = if node { { node:range() } } else { nil },
+      word = line && vim.fn.expand('<cword>'),
+      ts_type = node && node:type(),
+      ts_range = node && { node:range() },
       bufname = file,
-      root = root,
+      root = vim.fs.root(file, { '.git', '.gitignore' }) || '',
       filetype = vim.api.nvim_get_option_value('filetype', { buf = buf }),
-      range = params.range,
+      range = range,
       g = self.ctx,
     }
-
-    return ctx
   }
 
   --- @param ctx Ctx
@@ -164,7 +145,7 @@ local class lsp {
       ['textDocument/codeAction'] = (params) -> {
         local ctx = self:get_ctx(params)
         if !ctx {
-          vim.notify('could not get action context', log_levels.ERROR)
+          vim.notify('could not get action context', vim.log.levels.ERROR)
           return
         }
         return self:code_actions(ctx)
@@ -183,7 +164,7 @@ local class lsp {
           }, debug.traceback)
 
           if !status {
-            vim.notify('error in LSP request: ' .. error, log_levels.ERROR)
+            vim.notify('error in LSP request: ' .. error, vim.log.levels.ERROR)
           }
           return true
         },
