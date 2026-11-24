@@ -1,0 +1,188 @@
+--- @class Action
+--- @field command string - command name
+--- @field title string - what should be shown in the picker
+--- @field show function|{ ft: string[] }|nil - should the action be shown
+--- @field fn function - what to do when action is triggered
+--- @field ctx Ctx - set by lsp:code_actions before show is checked
+
+--- @param action Action
+--- @return boolean
+local function should_show(action) {
+  -- default to showing
+  if action.show == nil {
+    return true
+  }
+  if type(action.show) == 'function' {
+    return action.show(action.ctx)
+  }
+  if type(action.show) == 'table' {
+    if action.show.ft != nil {
+      if vim.tbl_contains(action.show.ft || {}, action.ctx.filetype) {
+        return true
+      }
+    }
+  }
+  -- don't show if something was specified and it didn't match above
+  return false
+}
+
+--- @class lsp
+local class lsp {
+  -- Create a new server instance
+  new(config) {
+    self.name = config.name
+    self.actions = config.actions || {}
+    self.commands = {}
+    self.ctx = {}
+    self.client = nil -- set by servers.start once the client is up
+
+    -- Initialize commands and titles
+    vim.iter(self.actions):each((action) -> {
+      if action.title == nil {
+        action.title = action.command
+      }
+      self.commands[action.command] = action.fn
+    })
+
+    -- Set up global context
+    self.ctx = match type(config.ctx) {
+      'function' => { config.ctx() }
+      'table' => { config.ctx }
+      _ => { error('invalid context type') }
+    }
+  }
+
+  --- @return table
+  make_params() {
+    const { mode } = vim.api.nvim_get_mode()
+    const offset = if self.client { self.client.offset_encoding } else { 'utf-16' }
+
+    if mode != 'v' && mode != 'V' {
+      return vim.lsp.util.make_range_params(0, offset)
+    }
+
+    local [_, srow, scol] = vim.fn.getpos('v')
+    local [_, erow, ecol] = vim.fn.getpos('.')
+
+    -- normalize so start comes before end
+    if erow < srow || (erow == srow && ecol < scol) {
+      srow, scol, erow, ecol = erow, ecol, srow, scol
+    }
+
+    if mode == 'V' {
+      scol = 1
+      ecol = #vim.api.nvim_buf_get_lines(0, erow - 1, erow, true)[1]
+    }
+
+    return vim.lsp.util.make_given_range_params(
+      { srow, scol - 1 },
+      { erow, ecol - 1 },
+      0, offset,
+    )
+  }
+
+  --- @class Ctx
+  --- @field buf number - buffer number
+  --- @field win number - window number
+  --- @field row number - current line number
+  --- @field col number - current column number
+  --- @field line string - current line
+  --- @field word string|nil - word under cursor
+  --- @field ts_type string|nil - type of the current TS node
+  --- @field ts_range table|nil - range of the current TS node
+  --- @field bufname string - full path to file in buffer
+  --- @field root string - root directory of the file
+  --- @field filetype string - filetype
+  --- @field range table - LSP range of the selection/cursor, plus `rc` = { srow, scol, erow, ecol }
+  --- @field g table - global run context provided in the config
+
+  --- @param params table|nil
+  --- @return Ctx|nil
+  get_ctx(params = self:make_params()) {
+    const { textDocument: doc, range } = params
+    const buf = vim.uri_to_bufnr(doc.uri)
+    const win = vim.fn.win_findbuf(buf)[1]
+    if !win { return }
+
+    const { start, end: stop } = range
+    range.rc = { start.line, start.character, stop.line, stop.character }
+
+    const line = vim.api.nvim_buf_get_lines(buf, start.line, start.line + 1, false)[1]
+    const node = vim.treesitter.get_node()
+    const file = vim.uri_to_fname(doc.uri)
+
+    return {
+      buf = buf,
+      win = win,
+      row = start.line,
+      col = start.character,
+      line = line,
+      word = line && vim.fn.expand('<cword>'),
+      ts_type = node && node:type(),
+      ts_range = node && { node:range() },
+      bufname = file,
+      root = vim.fs.root(file, { '.git', '.gitignore' }) || '',
+      filetype = vim.api.nvim_get_option_value('filetype', { buf = buf }),
+      range = range,
+      g = self.ctx,
+    }
+  }
+
+  --- @param ctx Ctx
+  code_actions(ctx) {
+    return vim.iter(self.actions)
+      :filter((action) -> {
+        action.ctx = ctx
+        return should_show(action)
+      })
+      :totable()
+  }
+
+  handlers() {
+    -- stylua: ignore
+    local handlers = {
+      ['initialize'] = () -> ({ capabilities = { codeActionProvider = true } }),
+      ['textDocument/codeAction'] = (params) -> {
+        local ctx = self:get_ctx(params)
+        if !ctx {
+          vim.notify('could not get action context', vim.log.levels.ERROR)
+          return
+        }
+        return self:code_actions(ctx)
+      },
+      ['shutdown'] = () -> {},
+    }
+
+    return (dispatchers) -> {
+      local closing = false
+      return {
+        request = (method, params, handler) -> {
+          local status, error = xpcall(() -> {
+            if handlers[method] {
+              handler(nil, handlers[method](params))
+            }
+          }, debug.traceback)
+
+          if !status {
+            vim.notify('error in LSP request: ' .. error, vim.log.levels.ERROR)
+          }
+          return true
+        },
+
+        notify = (method) -> {
+          if method == 'exit' {
+            dispatchers.on_exit(0, 15)
+          }
+        },
+
+        is_closing = () -> closing,
+
+        terminate = () -> {
+          closing = true
+        },
+      }
+    }
+  }
+}
+
+return lsp

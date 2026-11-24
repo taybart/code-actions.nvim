@@ -1,0 +1,41 @@
+module servers = {} -- Store server instances
+
+local lsp = require('code-actions/lsp')
+
+module function start(config, buf, ft) {
+  local type = vim.api.nvim_get_option_value('buftype', { buf = buf })
+  if vim.tbl_contains({ 'nofile', 'prompt', 'file', 'quikfix', 'terminal' }, type) {
+    return
+  }
+
+  -- is this an excluded file type?
+  if vim.tbl_contains(config.filetypes.exclude, ft) {
+    return
+  }
+  -- are there included file types and does the file type match?
+  if #config.filetypes.include > 0 && !vim.tbl_contains(config.filetypes.include, ft) {
+    return
+  }
+
+  -- Create a new server instance for this configuration
+  local server = lsp.new(config)
+
+  local client_id = vim.lsp.start({
+    name = config.name,
+    cmd = server:handlers(),
+    bufnr = buf,
+    on_init = (client) -> {
+      server.client = client
+    },
+    on_exit = () -> {},
+    commands = server.commands,
+  })
+  if !client_id {
+    vim.notify('Failed to start LSP server', vim.log.levels.ERROR)
+    return
+  }
+  -- Store the server instance
+  servers[config.name] = server
+
+  return client_id
+}
